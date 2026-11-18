@@ -185,6 +185,15 @@ const api: MyaApi = {
     dismiss: () => ipcRenderer.invoke(IpcChannel.BossesDismiss),
     getTestCommand: () => ipcRenderer.invoke(IpcChannel.BossesGetTestCommand),
     setTestCommand: (command) => ipcRenderer.invoke(IpcChannel.BossesSetTestCommand, command)
+  },
+  providers: {
+    status: (force) => ipcRenderer.invoke(IpcChannel.ProvidersStatus, force === true),
+    loginOAuth: (provider) => ipcRenderer.invoke(IpcChannel.ProvidersLoginOAuth, provider),
+    cancelLogin: (provider) => ipcRenderer.invoke(IpcChannel.ProvidersCancelLogin, provider),
+    saveApiKey: (provider, apiKey) =>
+      ipcRenderer.invoke(IpcChannel.ProvidersSaveApiKey, provider, apiKey),
+    logout: (provider) => ipcRenderer.invoke(IpcChannel.ProvidersLogout, provider),
+    installCli: (provider) => ipcRenderer.invoke(IpcChannel.ProvidersInstallCli, provider)
   }
 }
 

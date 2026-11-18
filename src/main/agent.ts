@@ -30,13 +30,20 @@ import { withCall } from '../shared/callAgent'
 import { labelText, toolLabel } from '../shared/toolLabel'
 import { noteRateLimit, readAccountFromRun } from './account'
 import { listAgents } from './agents'
-import { getChatSession, setChatChoice, setChatSession, setChatTheme } from './chats'
+import {
+  getChatSession,
+  setChatChoice,
+  setChatSession,
+  setChatTheme,
+  setProviderSession
+} from './chats'
 import { historyItems, type RecordedMessage, type SavedTask } from './history'
 import { DENY_MESSAGE, forIpc, isAgentTool } from './ipcInput'
 import { callFacts } from './loot'
 import { recordTestRun, runEnded } from './bosses'
 import { shellResult } from './testOutput'
 import { isTestCommand } from '../shared/testRuns'
+import { executeCliProvider } from './cliProviders'
 import { getActiveVoice } from './mascots'
 import { choiceForRun } from './modelChoice'
 import { userContent, type SendImage } from './pastedImages'
@@ -44,7 +51,7 @@ import { recordRunEnd, recordTaskStart } from './progressionStore'
 import { childEnv, claudeExecutable, loadSdk, type Sdk } from './sdk'
 import { getDefaultChoice, getTestCommand } from './settings'
 import { voiceAppend } from './voice'
-import { AUTO, AUTO_CHOICE, isEffortLevel, type ModelChoice } from '../shared/models'
+import { AUTO, AUTO_CHOICE, isEffortLevel, providerOf, type ModelChoice } from '../shared/models'
 import {
   createInputQueue,
   createMessageTracker,
@@ -777,9 +784,6 @@ async function execute(run: Run): Promise<void> {
   let thinking: { index: number; startedAt: number } | null = null
 
   try {
-    const sdk = await loadSdk()
-    resumed = await sessionToResume(sdk, run)
-
     // The chat's model and thinking choice. AUTO means leave the option out, so
     // Claude Code uses its own default. A saved choice that no longer fits is
     // replaced, with a line saying so once.
@@ -788,6 +792,37 @@ async function execute(run: Run): Promise<void> {
     run.choice = picked.choice
     for (const text of picked.notices) emit(run, { requestId: run.requestId, type: 'notice', text })
     const { model, effort } = run.choice
+
+    if (providerOf(model) !== 'claude') {
+      const cliResult = await executeCliProvider({
+        requestId: run.requestId,
+        cwd: run.cwd,
+        choice: run.choice,
+        abortController: run.abortController,
+        agents: run.agents,
+        input: run.input,
+        messages: run.messages,
+        emit: (event) => emit(run, event),
+        onReplyText: (text) => {
+          run.reply = text
+        },
+        onTaskEnded: ({ taskId, status, report, agent, loot, xp }) => {
+          notify((w) =>
+            w.taskEnded({
+              runId: run.requestId,
+              taskId,
+              status,
+              report,
+              agent,
+              loot,
+              xp
+            })
+          )
+        }
+      })
+      outcome = cliResult.outcome
+      return
+    }
 
     // The active mascot's voice, as a system-prompt append. A broken lookup
     // never blocks or fails the run: it just runs with no voice.
@@ -799,6 +834,9 @@ async function execute(run: Run): Promise<void> {
       voice = { name: null, voice: null }
     }
     const append = voiceAppend(voice.name, voice.voice)
+
+    const sdk = await loadSdk()
+    resumed = await sessionToResume(sdk, run)
 
     const options: Options = {
       cwd: run.cwd,
@@ -1153,6 +1191,8 @@ export async function resetChat(
     return { ok: false, error: { code: 'busy', message: 'A run is already in progress.' } }
   }
   await setChatSession(cwd, null)
+  await setProviderSession(cwd, 'codex', null)
+  await setProviderSession(cwd, 'gemini', null)
   // The new chat starts from the saved defaults. With "Use for new chats too" the
   // defaults are the last pick, so it starts on the same choice.
   await setChatChoice(cwd, await getDefaultChoice())

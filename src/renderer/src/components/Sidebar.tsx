@@ -26,7 +26,8 @@ const NAV_ITEMS: { screen: Screen; label: string }[] = [
   { screen: 'inbox', label: 'INBOX' },
   { screen: 'agents', label: 'AGENTS' },
   { screen: 'mascots', label: 'MASCOTS' },
-  { screen: 'achievements', label: 'ACHIEVEMENTS' }
+  { screen: 'achievements', label: 'ACHIEVEMENTS' },
+  { screen: 'logins', label: 'LOGINS' }
 ]
 
 function Sidebar({

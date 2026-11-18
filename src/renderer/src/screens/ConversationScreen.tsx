@@ -63,6 +63,7 @@ type ConversationScreenProps = {
   // Changes when another screen wants the input focused.
   focusRequest: number
   onOpenTask: (taskId: string, section?: 'activity') => void
+  onModelChange?: (model: string) => void
   // The open conversation's boss fight, and the party panel's tab (kept by the app).
   boss: BossFightStore
   partyTab: PartyTab
@@ -329,6 +330,7 @@ function ConversationScreen({
   onCallChange,
   focusRequest,
   onOpenTask,
+  onModelChange,
   boss,
   partyTab,
   onPartyTab
@@ -337,8 +339,6 @@ function ConversationScreen({
     conversation
   const reducedMotion = usePrefersReducedMotion()
   const mascot = useActiveMascot(window.mya.mascots)
-  // The name the conversation speaks under: the mascot's.
-  const speaker = speakerName(mascot)
   const { agents, loaded: agentsLoaded } = useAgents(project.path)
   const progress = useAgentProgress(agents)
   // The equipped title and accessory: the title under the state caption, the
@@ -350,6 +350,12 @@ function ConversationScreen({
     : null
   const { mode, toggle } = usePartyPanelMode()
   const modelChoice = useModelChoice(project.path)
+  // The name the conversation speaks under: the mascot's, or the active provider (Codex, Gemini, Claude).
+  const speaker = speakerName(mascot, modelChoice.choice.model)
+
+  useEffect(() => {
+    onModelChange?.(modelChoice.choice.model)
+  }, [modelChoice.choice.model, onModelChange])
   const chatTheme = useChatTheme(project.path)
   const [themeOpen, setThemeOpen] = useState(false)
   const [typing, setTyping] = useState(false)

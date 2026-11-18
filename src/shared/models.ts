@@ -48,13 +48,74 @@ export type RawModelInfo = {
   supportedEffortLevels?: readonly string[]
 }
 
+export type ProviderId = 'claude' | 'codex' | 'gemini'
+
+export function providerOf(model: string): ProviderId {
+  if (model.startsWith('codex:')) return 'codex'
+  if (model.startsWith('gemini:')) return 'gemini'
+  return 'claude'
+}
+
+export function stripProvider(model: string): string {
+  const idx = model.indexOf(':')
+  return idx >= 0 ? model.slice(idx + 1) : model
+}
+
+export const EXTRA_MODELS: readonly ModelOption[] = [
+  {
+    value: 'codex:gpt-5.3-codex',
+    resolvedModel: 'gpt-5.3-codex',
+    name: 'Codex (Default)',
+    description: 'OpenAI Codex agent for autonomous coding and terminal tasks.',
+    effortLevels: ['low', 'medium', 'high']
+  },
+  {
+    value: 'codex:o4-mini',
+    resolvedModel: 'o4-mini',
+    name: 'Codex (o4-mini)',
+    description: 'Fast OpenAI reasoning model for quick edits and debugging.',
+    effortLevels: ['low', 'medium', 'high']
+  },
+  {
+    value: 'gemini:gemini-2.5-pro',
+    resolvedModel: 'gemini-2.5-pro',
+    name: 'Gemini Pro (Default)',
+    description: 'Google deep reasoning model for complex coding and architecture.',
+    effortLevels: ['low', 'medium', 'high']
+  },
+  {
+    value: 'gemini:gemini-4-argon-high',
+    resolvedModel: 'gemini-4-argon-high',
+    name: 'Gemini 4 Argon',
+    description: 'Google AI Pro flagship reasoning model via Antigravity CLI.',
+    effortLevels: ['low', 'medium', 'high']
+  },
+  {
+    value: 'gemini:gemini-4-hydrogen-high',
+    resolvedModel: 'gemini-4-hydrogen-high',
+    name: 'Gemini 4 Hydrogen',
+    description: 'Google AI Pro deep coding model via Antigravity CLI.',
+    effortLevels: ['low', 'medium', 'high', 'xhigh']
+  },
+  {
+    value: 'gemini:gemini-3.8-flash-high',
+    resolvedModel: 'gemini-3.8-flash-high',
+    name: 'Gemini 3.8 Flash',
+    description: 'Fast Google AI Pro model for everyday coding and quick tasks.',
+    effortLevels: ['low', 'medium', 'high']
+  },
+  {
+    value: 'gemini:gemini-2.5-flash',
+    resolvedModel: 'gemini-2.5-flash',
+    name: 'Gemini 2.5 Flash',
+    description: 'Fast Google model for everyday coding and quick tasks.',
+    effortLevels: []
+  }
+]
+
 // The 'default' row is Claude Code's own default model: AUTO already means it, so it
 // is not a row of its own, but its effort levels are the ones AUTO offers. Every
-// other row stays, in the order the SDK gives them.
-//
-// Effort fields: a row that lists its levels has them. A row with supportsEffort
-// false has none. When other rows have the fields and this one does not, it takes
-// no level. When no row has them at all (an older Claude Code), they are unknown.
+// other row stays, in the order the SDK gives them, followed by Codex and Gemini.
 export function modelLists(infos: readonly RawModelInfo[]): ModelLists {
   const known = infos.some(
     (info) => Array.isArray(info.supportedEffortLevels) || typeof info.supportsEffort === 'boolean'
@@ -68,7 +129,7 @@ export function modelLists(infos: readonly RawModelInfo[]): ModelLists {
     return known ? [] : null
   }
 
-  const models = infos
+  const claudeModels = infos
     .filter((info) => info.value !== 'default')
     .map((info): ModelOption => ({
       value: info.value,
@@ -77,6 +138,7 @@ export function modelLists(infos: readonly RawModelInfo[]): ModelLists {
       description: info.description,
       effortLevels: levelsOf(info)
     }))
+  const models = [...claudeModels, ...EXTRA_MODELS]
   const fallback = infos.find((info) => info.value === 'default')
   const resolved = fallback?.resolvedModel ?? null
   return {
@@ -184,7 +246,14 @@ export function meterFill(effort: string): number | 'dotted' {
 
 // --- Power and speed bars, and the copy -------------------------------------------
 
-type Family = 'opus' | 'sonnet' | 'haiku'
+type Family =
+  | 'opus'
+  | 'sonnet'
+  | 'haiku'
+  | 'o4-mini'
+  | 'codex'
+  | 'gemini-2.5-pro'
+  | 'gemini-2.5-flash'
 
 const FAMILIES: Record<Family, { power: number; speed: number; description: string }> = {
   opus: {
@@ -197,6 +266,26 @@ const FAMILIES: Record<Family, { power: number; speed: number; description: stri
     power: 1,
     speed: 3,
     description: 'Fastest and lightest. Small edits and quick questions.'
+  },
+  'o4-mini': {
+    power: 2,
+    speed: 3,
+    description: 'Fast OpenAI reasoning model for quick edits and debugging.'
+  },
+  codex: {
+    power: 3,
+    speed: 2,
+    description: 'OpenAI Codex agent for autonomous coding and terminal tasks.'
+  },
+  'gemini-2.5-pro': {
+    power: 3,
+    speed: 2,
+    description: 'Google deep reasoning model for complex coding and architecture.'
+  },
+  'gemini-2.5-flash': {
+    power: 2,
+    speed: 3,
+    description: 'Fast Google model for everyday coding and quick tasks.'
   }
 }
 

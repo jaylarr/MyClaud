@@ -14,7 +14,20 @@ export const TOOL_CHOICES = [
   'WebSearch'
 ] as const
 
-export const MODEL_CHOICES = ['inherit', 'sonnet', 'opus', 'haiku', 'fable'] as const
+export const MODEL_CHOICES = [
+  'inherit',
+  'sonnet',
+  'opus',
+  'haiku',
+  'fable',
+  'codex:gpt-5.3-codex',
+  'codex:o4-mini',
+  'gemini:gemini-2.5-pro',
+  'gemini:gemini-4-argon-high',
+  'gemini:gemini-4-hydrogen-high',
+  'gemini:gemini-3.8-flash-high',
+  'gemini:gemini-2.5-flash'
+] as const
 
 export function agentNameError(name: string): string | null {
   const trimmed = name.trim()

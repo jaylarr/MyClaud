@@ -1,5 +1,14 @@
+import { homedir } from 'os'
+import { join } from 'path'
 import type { Options, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
-import { modelLists, type ModelLists } from '../shared/models'
+import {
+  EFFORT_LEVELS,
+  modelLists,
+  type EffortLevel,
+  type ModelLists,
+  type ModelOption
+} from '../shared/models'
+import { isObject, readJsonFile } from './jsonFile'
 import { createInputQueue } from './runInput'
 import { childEnv, claudeExecutable, loadSdk } from './sdk'
 
@@ -17,7 +26,52 @@ export type ModelsLoad = { ok: true; lists: ModelLists } | { ok: false; message:
 
 const cache = new Map<string, Promise<ModelsLoad>>()
 
+async function loadCodexCachedModels(): Promise<ModelOption[]> {
+  const raw = await readJsonFile(join(homedir(), '.codex', 'models_cache.json'))
+  if (!isObject(raw) || !Array.isArray(raw.models)) return []
+  const result: ModelOption[] = []
+  for (const item of raw.models) {
+    if (!isObject(item)) continue
+    if (item.visibility !== 'list') continue
+    const slug = typeof item.slug === 'string' ? item.slug.trim() : ''
+    if (!slug) continue
+    const displayName =
+      typeof item.display_name === 'string' && item.display_name.trim() !== ''
+        ? item.display_name.trim()
+        : slug
+    const description =
+      typeof item.description === 'string' && item.description.trim() !== ''
+        ? item.description.trim()
+        : 'OpenAI Codex model.'
+    const rawLevels = Array.isArray(item.supported_reasoning_levels)
+      ? item.supported_reasoning_levels
+      : []
+    const effortLevels: EffortLevel[] = EFFORT_LEVELS.filter((lvl) =>
+      rawLevels.some((entry) => isObject(entry) && entry.effort === lvl)
+    )
+    result.push({
+      value: `codex:${slug}`,
+      resolvedModel: slug,
+      name: `Codex (${displayName})`,
+      description,
+      effortLevels: effortLevels.length > 0 ? effortLevels : ['low', 'medium', 'high']
+    })
+  }
+  return result
+}
+
+function mergeCodexModels(base: ModelLists, cached: ModelOption[]): ModelLists {
+  if (cached.length === 0) return base
+  const existingValues = new Set(base.models.map((m) => m.value))
+  const additions = cached.filter((m) => !existingValues.has(m.value))
+  return {
+    ...base,
+    models: [...base.models, ...additions]
+  }
+}
+
 async function fetchModels(cwd: string): Promise<ModelsLoad> {
+  const codexCached = await loadCodexCachedModels()
   const input = createInputQueue<SDKUserMessage>()
   const abortController = new AbortController()
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -44,7 +98,7 @@ async function fetchModels(cwd: string): Promise<ModelsLoad> {
         )
       })
       const infos = await Promise.race([query.supportedModels(), timeout])
-      return { ok: true, lists: modelLists(infos) }
+      return { ok: true, lists: mergeCodexModels(modelLists(infos), codexCached) }
     } finally {
       input.close()
       abortController.abort()
@@ -52,10 +106,10 @@ async function fetchModels(cwd: string): Promise<ModelsLoad> {
     }
   } catch (err) {
     console.error(
-      '[models] Could not load the model list:',
+      '[models] Could not load the Claude model list, falling back to Codex/Gemini models:',
       err instanceof Error ? err.message : err
     )
-    return { ok: false, message: err instanceof Error ? err.message : String(err) }
+    return { ok: true, lists: mergeCodexModels(modelLists([]), codexCached) }
   } finally {
     clearTimeout(timer)
   }

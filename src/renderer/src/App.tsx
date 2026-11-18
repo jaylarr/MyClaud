@@ -14,6 +14,7 @@ import AgentsScreen from './screens/AgentsScreen'
 import MascotsScreen from './screens/MascotsScreen'
 import type { MascotsTab } from './screens/mascotsTabIds'
 import AchievementsScreen from './screens/AchievementsScreen'
+import LoginsScreen from './screens/LoginsScreen'
 import { useProgression } from './hooks/useProgression'
 import { useBossFight } from './hooks/useBossFight'
 import type { PartyTab } from './components/PartyPanel'
@@ -51,6 +52,7 @@ function App(): React.JSX.Element {
   const [call, setCall] = useState<CallTarget | null>(null)
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
   const [focusRequest, setFocusRequest] = useState(0)
+  const [activeModel, setActiveModel] = useState<string>('auto')
 
   const handleOpenProject = useCallback(async (): Promise<void> => {
     const previousPath = project?.path
@@ -126,7 +128,13 @@ function App(): React.JSX.Element {
   )
 
   const openTaskSummary = tasks.tasks.find((task) => task.id === selectedTaskId) ?? null
-  const crumb = titleBarCrumb(screen, speakerName(mascot), project, openTaskSummary, mascotsTab)
+  const crumb = titleBarCrumb(
+    screen,
+    speakerName(mascot, activeModel),
+    project,
+    openTaskSummary,
+    mascotsTab
+  )
 
   const mainWaiting = conversation.items.some(
     (item) => item.kind === 'tool' && item.permission !== null && item.taskId === null
@@ -180,6 +188,7 @@ function App(): React.JSX.Element {
             boss={boss}
             partyTab={partyTab}
             onPartyTab={setPartyTab}
+            onModelChange={setActiveModel}
           />
         ) : (
           <NoProject title="CHAT" onOpenProject={() => void handleOpenProject()} />
@@ -204,6 +213,7 @@ function App(): React.JSX.Element {
         <MascotsScreen tab={mascotsTab} onTab={setMascotsTab} setLeaveGuard={setLeaveGuard} />
       )}
       {screen === 'achievements' && <AchievementsScreen progression={progression} />}
+      {screen === 'logins' && <LoginsScreen />}
       {screen === 'account' && <AccountScreen store={account} />}
       <AchievementToast
         mascot={mascot}

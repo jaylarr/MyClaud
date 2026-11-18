@@ -14,8 +14,38 @@ import { isObject, readJsonFile, serialQueue, writeJsonFile } from './jsonFile'
 
 const VERSION = 1
 
-type Chat = { sessionId: string | null; choice: ModelChoice | null; theme: ThemeChoice | null }
+export type CliProvider = 'codex' | 'gemini'
+
+type Chat = {
+  sessionId: string | null
+  codexSessionId: string | null
+  geminiSessionId: string | null
+  choice: ModelChoice | null
+  theme: ThemeChoice | null
+}
 type Chats = Record<string, Chat>
+
+const EMPTY_CHAT: Chat = {
+  sessionId: null,
+  codexSessionId: null,
+  geminiSessionId: null,
+  choice: null,
+  theme: null
+}
+
+function isEmptyChat(chat: Chat): boolean {
+  return (
+    chat.sessionId === null &&
+    chat.codexSessionId === null &&
+    chat.geminiSessionId === null &&
+    chat.choice === null &&
+    chat.theme === null
+  )
+}
+
+function optString(value: unknown): string | null {
+  return typeof value === 'string' && value !== '' ? value : null
+}
 
 let cache: Chats | null = null
 const queue = serialQueue()
@@ -32,18 +62,21 @@ async function load(): Promise<Chats> {
     if (isObject(raw) && raw.version === VERSION && isObject(raw.chats)) {
       for (const [path, entry] of Object.entries(raw.chats)) {
         if (!isObject(entry)) continue
-        const sessionId =
-          typeof entry.sessionId === 'string' && entry.sessionId !== '' ? entry.sessionId : null
-        const choice =
-          typeof entry.model === 'string' && typeof entry.effort === 'string'
-            ? { model: entry.model, effort: entry.effort }
-            : null
-        const theme =
-          typeof entry.themeId === 'string' && isValidFade(entry.fade)
-            ? { themeId: entry.themeId, fade: entry.fade }
-            : null
-        if (sessionId !== null || choice !== null || theme !== null) {
-          chats[path] = { sessionId, choice, theme }
+        const chat: Chat = {
+          sessionId: optString(entry.sessionId),
+          codexSessionId: optString(entry.codexSessionId),
+          geminiSessionId: optString(entry.geminiSessionId),
+          choice:
+            typeof entry.model === 'string' && typeof entry.effort === 'string'
+              ? { model: entry.model, effort: entry.effort }
+              : null,
+          theme:
+            typeof entry.themeId === 'string' && isValidFade(entry.fade)
+              ? { themeId: entry.themeId, fade: entry.fade }
+              : null
+        }
+        if (!isEmptyChat(chat)) {
+          chats[path] = chat
         }
       }
     }
@@ -57,11 +90,21 @@ async function load(): Promise<Chats> {
 async function save(chats: Chats): Promise<void> {
   const out: Record<
     string,
-    { sessionId?: string; model?: string; effort?: string; themeId?: string; fade?: number }
+    {
+      sessionId?: string
+      codexSessionId?: string
+      geminiSessionId?: string
+      model?: string
+      effort?: string
+      themeId?: string
+      fade?: number
+    }
   > = {}
   for (const [path, chat] of Object.entries(chats)) {
     out[path] = {
       ...(chat.sessionId !== null ? { sessionId: chat.sessionId } : {}),
+      ...(chat.codexSessionId !== null ? { codexSessionId: chat.codexSessionId } : {}),
+      ...(chat.geminiSessionId !== null ? { geminiSessionId: chat.geminiSessionId } : {}),
       ...(chat.choice ? { model: chat.choice.model, effort: chat.choice.effort } : {}),
       ...(chat.theme ? { themeId: chat.theme.themeId, fade: chat.theme.fade } : {})
     }
@@ -78,16 +121,18 @@ async function save(chats: Chats): Promise<void> {
 function update(projectPath: string, change: (chat: Chat) => Chat): Promise<void> {
   return queue(async () => {
     const chats = await load()
-    const before = chats[projectPath] ?? { sessionId: null, choice: null, theme: null }
+    const before = chats[projectPath] ?? EMPTY_CHAT
     const after = change(before)
     if (
       after.sessionId === before.sessionId &&
+      after.codexSessionId === before.codexSessionId &&
+      after.geminiSessionId === before.geminiSessionId &&
       after.choice === before.choice &&
       after.theme === before.theme
     ) {
       return
     }
-    if (after.sessionId === null && after.choice === null && after.theme === null) {
+    if (isEmptyChat(after)) {
       delete chats[projectPath]
     } else {
       chats[projectPath] = after
@@ -129,6 +174,31 @@ export function setChatSession(projectPath: string, sessionId: string | null): P
   })
 }
 
+export function getProviderSession(
+  projectPath: string,
+  provider: CliProvider
+): Promise<string | null> {
+  return queue(async () => {
+    const chat = (await load())[projectPath]
+    if (!chat) return null
+    return provider === 'codex' ? chat.codexSessionId : chat.geminiSessionId
+  })
+}
+
+export function setProviderSession(
+  projectPath: string,
+  provider: CliProvider,
+  sessionId: string | null
+): Promise<void> {
+  return update(projectPath, (chat) => {
+    const current = provider === 'codex' ? chat.codexSessionId : chat.geminiSessionId
+    if (current === sessionId) return chat
+    return provider === 'codex'
+      ? { ...chat, codexSessionId: sessionId }
+      : { ...chat, geminiSessionId: sessionId }
+  })
+}
+
 // The chat's saved model and thinking choice, or null when it has none yet (a new
 // chat, or one saved before the picker).
 export function getChatChoice(projectPath: string): Promise<ModelChoice | null> {
@@ -165,8 +235,16 @@ export function dropThemeFromChats(themeId: string): Promise<void> {
     for (const [path, chat] of Object.entries(chats)) {
       if (chat.theme?.themeId !== themeId) continue
       changed = true
-      if (chat.sessionId === null && chat.choice === null) delete chats[path]
-      else chats[path] = { ...chat, theme: null }
+      if (
+        chat.sessionId === null &&
+        chat.codexSessionId === null &&
+        chat.geminiSessionId === null &&
+        chat.choice === null
+      ) {
+        delete chats[path]
+      } else {
+        chats[path] = { ...chat, theme: null }
+      }
     }
     if (changed) await save(chats)
   })

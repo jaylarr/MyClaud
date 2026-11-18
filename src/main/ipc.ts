@@ -3,12 +3,21 @@ import {
   IpcChannel,
   type AgentSendResult,
   type ChatHistory,
+  type CliProviderId,
   type ModelChoiceResult,
   type ModelsResult,
   type ProjectInfo
 } from '../shared/ipc'
 import { accountData, checkAccount, openUsagePage } from './account'
 import { openInEditor } from './editor'
+import {
+  cancelProviderLogin,
+  getProvidersStatus,
+  installProviderCli,
+  loginProviderOAuth,
+  logoutProvider,
+  saveProviderApiKey
+} from './providerAuth'
 import { chatChoice, listModels, saveChoice } from './modelChoice'
 import { prefetchModels } from './models'
 import { registerWindowIpc } from './windowControls'
@@ -357,5 +366,46 @@ export function registerIpc(): void {
       console.error('Could not save settings:', err instanceof Error ? err.message : err)
       return { ok: false }
     }
+  })
+
+  const isCliProvider = (v: unknown): v is CliProviderId => v === 'codex' || v === 'gemini'
+
+  ipcMain.handle(IpcChannel.ProvidersStatus, (_event, force: unknown) =>
+    getProvidersStatus(force === true)
+  )
+  ipcMain.handle(IpcChannel.ProvidersLoginOAuth, async (_event, provider: unknown) => {
+    if (!isCliProvider(provider)) {
+      return { ok: false, error: 'Unknown provider.', status: await getProvidersStatus() }
+    }
+    return loginProviderOAuth(provider)
+  })
+  ipcMain.handle(IpcChannel.ProvidersCancelLogin, (_event, provider: unknown) => {
+    if (!isCliProvider(provider)) return { ok: false }
+    return cancelProviderLogin(provider)
+  })
+  ipcMain.handle(
+    IpcChannel.ProvidersSaveApiKey,
+    async (_event, provider: unknown, apiKey: unknown) => {
+      if (!isCliProvider(provider) || typeof apiKey !== 'string') {
+        return {
+          ok: false,
+          error: 'Invalid provider or API key.',
+          status: await getProvidersStatus()
+        }
+      }
+      return saveProviderApiKey(provider, apiKey)
+    }
+  )
+  ipcMain.handle(IpcChannel.ProvidersLogout, async (_event, provider: unknown) => {
+    if (!isCliProvider(provider)) {
+      return { ok: false, error: 'Unknown provider.', status: await getProvidersStatus() }
+    }
+    return logoutProvider(provider)
+  })
+  ipcMain.handle(IpcChannel.ProvidersInstallCli, async (_event, provider: unknown) => {
+    if (!isCliProvider(provider)) {
+      return { ok: false, error: 'Unknown provider.', status: await getProvidersStatus() }
+    }
+    return installProviderCli(provider)
   })
 }

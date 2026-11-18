@@ -7,6 +7,7 @@ import { stopRun } from './agent'
 import { closePopups, setupPopups } from './popupWindow'
 import { registerIpc } from './ipc'
 import { prefetchModels } from './models'
+import { getProvidersStatus } from './providerAuth'
 import { getProject, loadProject } from './settings'
 import { loadProgression, useProjectFrom } from './progressionStore'
 import { loadBosses, watchConversations } from './bosses'
@@ -110,9 +111,10 @@ app.whenReady().then(async () => {
   })
 
   await loadProject()
-  // Start loading the model list for the open project now, so it is ready when the
-  // picker opens. It runs on its own: nothing waits for it.
+  // Start loading the model list and provider login status now, so both are ready in
+  // memory when the window opens.
   prefetchModels(getProject()?.path ?? null)
+  void getProvidersStatus()
   // Tasks cut off when the app last closed become stopped before anything reads them.
   await loadTasks()
   // XP and achievements. A corrupt progression.json is kept aside and the app starts.

@@ -34,3 +34,34 @@ body {
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+/* 8-bit pixel scrollbars matching the design tokens: square, crisp 2px borders, no rounding. */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg);
+  border: var(--border-thin) solid var(--line);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border: var(--border-thin) solid var(--bg);
+  border-radius: 0;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+  border-color: var(--text);
+}
+
+::-webkit-scrollbar-thumb:active {
+  background: var(--text);
+  border-color: var(--accent);
+}
+
+::-webkit-scrollbar-corner {
+  background: var(--bg);
+}

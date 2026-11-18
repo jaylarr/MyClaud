@@ -114,7 +114,13 @@ export const IpcChannel = {
   // Main to every window: a fight started, played a round, ended, or went away.
   BossesFightEvent: 'bosses:fight-event',
   // Main to every window: a boss was added, changed, deleted, or its POOL toggled.
-  BossesChanged: 'bosses:changed'
+  BossesChanged: 'bosses:changed',
+  ProvidersStatus: 'providers:status',
+  ProvidersLoginOAuth: 'providers:login-oauth',
+  ProvidersCancelLogin: 'providers:cancel-login',
+  ProvidersSaveApiKey: 'providers:save-api-key',
+  ProvidersLogout: 'providers:logout',
+  ProvidersInstallCli: 'providers:install-cli'
 } as const
 
 export type ProjectInfo = {
@@ -826,6 +832,14 @@ export type MyaApi = {
     getTestCommand: () => Promise<string>
     setTestCommand: (command: string) => Promise<{ ok: boolean; command: string }>
   }
+  providers: {
+    status: (force?: boolean) => Promise<ProvidersStatusResult>
+    loginOAuth: (provider: CliProviderId) => Promise<ProviderActionResult>
+    cancelLogin: (provider: CliProviderId) => Promise<{ ok: boolean }>
+    saveApiKey: (provider: CliProviderId, apiKey: string) => Promise<ProviderActionResult>
+    logout: (provider: CliProviderId) => Promise<ProviderActionResult>
+    installCli: (provider: CliProviderId) => Promise<ProviderActionResult>
+  }
 }
 
 // key is null before the open project has a conversation.
@@ -835,3 +849,35 @@ export type EquipChange = { kind: RewardKind; id: string | null }
 
 export type ProgressionResult<T extends object = object> =
   ({ ok: true } & T) | { ok: false; error: { message: string } }
+
+export type CliProviderId = 'codex' | 'gemini'
+
+export type ProviderAuthMethod = 'oauth' | 'api_key' | 'env' | null
+
+export type ProviderAccountInfo = {
+  name: string | null
+  email: string | null
+  plan: string | null
+  organization: string | null
+  activeUntil: string | null
+}
+
+export type ProviderStatus = {
+  provider: CliProviderId
+  installed: boolean
+  version: string | null
+  loggedIn: boolean
+  method: ProviderAuthMethod
+  // Masked API key, account email, or credential source description. Never a raw secret.
+  detail: string | null
+  account: ProviderAccountInfo | null
+}
+
+export type ProvidersStatusResult = {
+  codex: ProviderStatus
+  gemini: ProviderStatus
+}
+
+export type ProviderActionResult =
+  | { ok: true; status: ProvidersStatusResult }
+  | { ok: false; error: string; status: ProvidersStatusResult }

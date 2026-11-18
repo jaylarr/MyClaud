@@ -16,6 +16,7 @@ const SCREEN_NAMES: Record<Screen, string> = {
   agents: 'AGENTS',
   mascots: 'MASCOTS',
   achievements: 'ACHIEVEMENTS',
+  logins: 'LOGINS',
   account: 'ACCOUNT'
 }
 

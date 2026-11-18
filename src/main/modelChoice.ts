@@ -1,8 +1,10 @@
 import type { ModelChoiceResult, ModelsResult } from '../shared/ipc'
 import { AUTO, resolveChoice, type ModelChoice } from '../shared/models'
+import { accountData, checkAccount } from './account'
 import { getChatChoice, setChatChoice } from './chats'
 import { isObject } from './jsonFile'
 import { getModels } from './models'
+import { getProvidersStatus } from './providerAuth'
 import { getDefaultChoice, setDefaultChoice } from './settings'
 
 // A chat's model and thinking choice, checked against what the account can use now.
@@ -25,8 +27,22 @@ async function checkedChoice(cwd: string): Promise<{
   notices: string[]
   listed: boolean
 }> {
-  const saved = (await getChatChoice(cwd)) ?? (await getDefaultChoice())
+  let saved = (await getChatChoice(cwd)) ?? (await getDefaultChoice())
   const loaded = await getModels(cwd)
+  // When the chat is on AUTO and Claude Code is not signed in, fall back to a signed-in
+  // CLI provider (Codex or Gemini) so CHAT works out of the box without Claude Code.
+  if (saved.model === AUTO) {
+    const claudeAccount =
+      accountData().account.kind === 'loading' ? await checkAccount() : accountData()
+    if (claudeAccount.account.kind !== 'signed_in') {
+      const providers = await getProvidersStatus()
+      if (providers.codex.loggedIn) {
+        saved = { model: 'codex:gpt-5.3-codex', effort: saved.effort }
+      } else if (providers.gemini.loggedIn) {
+        saved = { model: 'gemini:gemini-2.5-pro', effort: saved.effort }
+      }
+    }
+  }
   const { choice, notices } = resolveChoice(saved, loaded.ok ? loaded.lists : null)
   return { saved, choice, notices, listed: loaded.ok }
 }
